@@ -144,5 +144,17 @@ export const lifeHacks = [
     "Take a picture of your fridge before grocery shopping so you know what you have.",
     "Use a can opener to open blister packs.",
     "Freeze grapes to chill wine without watering it down.",
-    "Use a rubber band to help unscrew a stripped screw."
+    "Use a rubber band to help unscrew a stripped screw.",
+    
+    // --- ACADEMIC & UNIVERSITY STUDY HACKS ---
+    "Struggling with focus? Use the Feynman Technique: Explain the concept you are studying in simple terms as if teaching a 10-year-old child. This instantly reveals gaps in your understanding.",
+    "To recall study materials better, write your summary notes by hand rather than typing. Hand-writing triggers deeper cognitive processing and conceptual synthesis.",
+    "When writing essays, copy and paste your text into Google Translate or a reader tool and listen to it read aloud. You will catch clunky sentences and grammatical errors in seconds.",
+    "Study in 25-minute Pomodoro bursts followed by a 5-minute active stretch. Doing so prevents cognitive fatigue and maintains high information retention rates.",
+    "Need to memorize list formulas? Create a visual Mind Palace: Associate each item with a specific physical object in your university dorm or campus path.",
+    "Before an exam, avoid drinking excessive caffeine. Opt for dark chocolate or peppermint, which naturally trigger cognitive stimulation and oxygen flow without jitters.",
+    "Always backup your college research papers and thesis work in multiple offline IndexedDB stores and cloud folders. Never rely on a single USB drive.",
+    "When study motivation hits rock bottom, try the '5-Minute Rule': Commit to opening your syllabus for just five minutes. Most of the time, you will keep studying.",
+    "Collaborate in active sandboxes and peer coding groups. Teaching your peers is the absolute fastest way to master complex algorithms.",
+    "Tackle your hardest academic tasks (Active Recall, Calculus, Complex Code) first thing in the morning when your decision-making capacity is at its peak."
 ];
