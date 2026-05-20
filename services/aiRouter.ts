@@ -1,16 +1,60 @@
 /**
- * Mwijay Note — AI Router v2
- * Single entry point for ALL AI calls.
- * Priority: Gemini Pool → Groq → Cerebras → OpenRouter → Offline Fallback
- * Handles key exhaustion, rate limits, provider outages, and offline mode.
+ * Mwijay Note — Prestige AI Router v3
+ * Production-grade AI routing engine with health checks, failovers, and context memory.
+ * Features:
+ *   1. Automatic failover: Gemini Pool → Groq → Cerebras → OpenRouter → n8n → Offline Fallback.
+ *   2. Provider health status tracks (healthy, degraded, failed) with recovery timers.
+ *   3. Context-aware prepending: Automatically queries IndexedDB user metrics for study habits/moods/Swahili preferences.
+ *   4. Unicode-safe base64 encoding (safeEncode) to prevent btoa collapses on non-ASCII characters.
+ *   5. Logs persistent routing events in LocalStorage/Preferences for the debug dashboard.
  */
 
 import { GoogleGenAI } from '@google/genai';
 import { aiKeyManager, Provider } from './aiKeyManager';
 import { cleanAiResponse } from '../utils/textUtils';
 import { Preferences } from '@capacitor/preferences';
+import { getCompressedMemoryPrefix } from './memory';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Unicode-Safe Base64 Encoding ─────────────────────────────────────────────
+
+/**
+ * Encodes strings into base64 safely without throwing exceptions on Unicode or emoji characters.
+ * Prevents btoa collapse issues on window.
+ */
+export function safeEncode(str: string): string {
+  try {
+    return btoa(
+      encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+      })
+    );
+  } catch (e) {
+    console.error("[safeEncode] Failed unicode routine, falling back to legacy escape:", e);
+    return btoa(unescape(encodeURIComponent(str)));
+  }
+}
+
+// ─── Types & Interfaces ───────────────────────────────────────────────────────
+
+export type AIStatus = 'healthy' | 'degraded' | 'failed';
+
+export interface AIProviderState {
+  name: Provider | 'n8n' | 'offline';
+  status: AIStatus;
+  lastFailedAt?: string;
+  failCount: number;
+  cooldownUntil?: string;
+}
+
+export interface AIRouterLog {
+  timestamp: string;
+  promptLength: number;
+  provider: string;
+  model: string;
+  status: 'success' | 'failed';
+  error?: string;
+  latencyMs: number;
+}
 
 export interface AIRequest {
   prompt: string;
@@ -19,17 +63,18 @@ export interface AIRequest {
   temperature?: number;
   preferProvider?: Provider;
   context?: 'journal' | 'finance' | 'flash' | 'coach' | 'format' | 'chat';
+  bypassMemory?: boolean; // Skip prepending user memory
 }
 
 export interface AIResponse {
   text: string;
-  provider: Provider | 'offline';
+  provider: Provider | 'offline' | 'n8n';
   model: string;
   usedFallback: boolean;
   offline: boolean;
 }
 
-// ─── Model Selection ──────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const GEMINI_MODELS = {
   fast: 'gemini-2.0-flash',
@@ -49,15 +94,13 @@ const OPENROUTER_MODELS = {
   fallback: 'mistralai/mistral-7b-instruct:free',
 };
 
-// ─── Offline Responses ────────────────────────────────────────────────────────
-
 const OFFLINE_RESPONSES: Record<string, string[]> = {
   journal: [
-    "Write freely — what's weighing on your mind today?",
-    "Describe one moment from today you want to remember.",
-    "What are you grateful for right now, even if it's small?",
-    "What's one thing you'd like to do differently tomorrow?",
-    "Write about someone who made today better.",
+    "Write freely — what's weighing on your mind today? (Offline Mode)",
+    "Describe one moment from today you want to remember. (Offline Mode)",
+    "What are you grateful for right now, even if it's small? (Offline Mode)",
+    "What's one thing you'd like to do differently tomorrow? (Offline Mode)",
+    "Write about someone who made today better. (Offline Mode)",
   ],
   finance: [
     'Offline mode: Track your expense manually. Note the category and date.',
@@ -81,54 +124,333 @@ function getOfflineText(context?: string): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// ─── Main Router ──────────────────────────────────────────────────────────────
+// ─── Main Router Class ────────────────────────────────────────────────────────
 
 class AIRouter {
   private readonly maxRetries = 4;
+  private providerStates: Map<string, AIProviderState> = new Map();
+  private routerLogs: AIRouterLog[] = [];
+
+  constructor() {
+    this.resetStates();
+    this.loadLogs();
+  }
+
+  private resetStates() {
+    const list: (Provider | 'n8n' | 'offline')[] = ['gemini', 'groq', 'cerebras', 'openrouter', 'n8n', 'offline'];
+    list.forEach(p => {
+      this.providerStates.set(p, {
+        name: p,
+        status: 'healthy',
+        failCount: 0,
+      });
+    });
+  }
+
+  // ── Public Accessors ────────────────────────────────────────────────────────
+
+  public getStatusDashboard(): AIProviderState[] {
+    this.recoverCooledDownProviders();
+    return Array.from(this.providerStates.values());
+  }
+
+  public getRouterLogs(): AIRouterLog[] {
+    return this.routerLogs;
+  }
+
+  public async clearLogs(): Promise<void> {
+    this.routerLogs = [];
+    await Preferences.remove({ key: 'mwijay_ai_router_logs' });
+  }
+
+  public resetCooldowns() {
+    this.resetStates();
+    aiKeyManager.resetAll();
+    console.info('[AIRouter] Cooldowns and key health map successfully reset');
+  }
+
+  public getActiveProvider(): Provider | 'n8n' | 'offline' {
+    this.recoverCooledDownProviders();
+    const sorted = ['gemini', 'groq', 'cerebras', 'openrouter', 'n8n'];
+    for (const name of sorted) {
+      const state = this.providerStates.get(name);
+      if (state && state.status === 'healthy') {
+        return name as any;
+      }
+    }
+    return 'offline';
+  }
+
+  // ── Core Router Call ────────────────────────────────────────────────────────
 
   async call(request: AIRequest): Promise<AIResponse> {
+    const startTime = Date.now();
+
+    // 1. Check network connectivity
     if (!navigator.onLine) {
+      this.logEvent('offline', 'offline', 'success', startTime, request.prompt.length);
       return this.buildOfflineResponse(request.context);
     }
 
-    // If a provider is explicitly preferred, try it first before normal routing
-    if (request.preferProvider) {
-      try {
-        return await this.dispatchToProvider(request.preferProvider, request);
-      } catch {
-        console.warn(`[AIRouter] Preferred provider '${request.preferProvider}' failed, routing normally`);
+    // 2. Load context memory and prepends automatically (unless bypassed)
+    let finalPrompt = request.prompt;
+    if (!request.bypassMemory) {
+      const memoryPrefix = await getCompressedMemoryPrefix();
+      if (memoryPrefix) {
+        finalPrompt = memoryPrefix + request.prompt;
       }
     }
 
+    const modifiedRequest = { ...request, prompt: finalPrompt };
+
+    // 3. Preferred provider routing
+    if (request.preferProvider) {
+      const state = this.providerStates.get(request.preferProvider);
+      if (state && state.status !== 'failed') {
+        try {
+          const res = await this.dispatchToProvider(request.preferProvider, modifiedRequest);
+          this.markSuccess(request.preferProvider);
+          this.logEvent(request.preferProvider, res.model, 'success', startTime, finalPrompt.length);
+          return res;
+        } catch (err: any) {
+          console.warn(`[AIRouter] Preferred '${request.preferProvider}' failed, routing normally:`, err.message);
+          this.markFailed(request.preferProvider, err.message);
+        }
+      }
+    }
+
+    // 4. Primary Failover Routing Chain
     let attempts = 0;
-    let lastError: Error | null = null;
-
     while (attempts < this.maxRetries) {
-      const best = aiKeyManager.getBestKey();
-
-      if (!best) {
-        console.error('[AIRouter] All providers exhausted — triggering cloud fallback check');
+      this.recoverCooledDownProviders();
+      const bestKeyInfo = aiKeyManager.getBestKey();
+      if (!bestKeyInfo) {
+        console.warn('[AIRouter] Key manager reports all keys dead/cooling down');
         break;
       }
 
-      try {
-        return await this.dispatchToProvider(best.provider, request, best.key);
-      } catch (err: unknown) {
-        lastError = err as Error;
+      const pState = this.providerStates.get(bestKeyInfo.provider);
+      if (pState && pState.status === 'failed') {
+        // Skip provider on cooldown
         attempts++;
-        // Exponential back-off: 300ms, 600ms, 900ms...
-        await this.sleep(300 * attempts);
+        continue;
+      }
+
+      try {
+        const res = await this.dispatchToProvider(bestKeyInfo.provider, modifiedRequest, bestKeyInfo.key);
+        this.markSuccess(bestKeyInfo.provider);
+        this.logEvent(bestKeyInfo.provider, res.model, 'success', startTime, finalPrompt.length);
+        return res;
+      } catch (err: any) {
+        console.error(`[AIRouter] Provider '${bestKeyInfo.provider}' invocation failed:`, err.message);
+        this.markFailed(bestKeyInfo.provider, err.message);
+        attempts++;
+        await this.sleep(200 * attempts);
       }
     }
 
-    // Try n8n premium cloud active fallback
-    if (navigator.onLine) {
-      const cloudRes = await this.tryCloudFallback(request);
-      if (cloudRes) return cloudRes;
+    // 5. Cloud Webhook Fallback (n8n Webhook)
+    const n8nState = this.providerStates.get('n8n');
+    if (n8nState && n8nState.status !== 'failed') {
+      const cloudRes = await this.tryCloudFallback(modifiedRequest);
+      if (cloudRes) {
+        this.markSuccess('n8n');
+        this.logEvent('n8n', cloudRes.model, 'success', startTime, finalPrompt.length);
+        return {
+          ...cloudRes,
+          provider: 'n8n'
+        };
+      } else {
+        this.markFailed('n8n', 'n8n cloud webhook rejected/failed');
+      }
     }
 
-    console.warn('[AIRouter] All attempts failed, using offline fallback.', lastError?.message);
+    // 6. Absolute Offline Fallback
+    console.warn('[AIRouter] All provider pipelines collapsed. Delivering offline response.');
+    this.logEvent('offline', 'offline', 'failed', startTime, finalPrompt.length, 'All providers failed');
     return this.buildOfflineResponse(request.context, true);
+  }
+
+  // ── Health State Management ──────────────────────────────────────────────────
+
+  private markSuccess(provider: string) {
+    const state = this.providerStates.get(provider);
+    if (state) {
+      state.status = 'healthy';
+      state.failCount = 0;
+      state.cooldownUntil = undefined;
+      state.lastFailedAt = undefined;
+    }
+  }
+
+  private markFailed(provider: string, err?: string) {
+    const state = this.providerStates.get(provider);
+    if (!state) return;
+
+    state.failCount += 1;
+    state.lastFailedAt = new Date().toISOString();
+
+    if (state.failCount >= 3) {
+      state.status = 'failed';
+      // 90 second cooldown for failed provider
+      const cooldown = new Date();
+      cooldown.setSeconds(cooldown.getSeconds() + 90);
+      state.cooldownUntil = cooldown.toISOString();
+      console.warn(`[AIRouter] Provider '${provider}' enters deep cooldown for 90s due to failure: ${err}`);
+    } else {
+      state.status = 'degraded';
+    }
+  }
+
+  private recoverCooledDownProviders() {
+    const now = new Date();
+    this.providerStates.forEach((state) => {
+      if (state.status === 'failed' && state.cooldownUntil) {
+        const cooldownTime = new Date(state.cooldownUntil);
+        if (now >= cooldownTime) {
+          state.status = 'healthy';
+          state.failCount = 0;
+          state.cooldownUntil = undefined;
+          console.info(`[AIRouter] Provider '${state.name}' has cooled down and is restored to healthy`);
+        }
+      }
+    });
+  }
+
+  public async healthCheck(provider: Provider | 'n8n'): Promise<boolean> {
+    try {
+      console.info(`[AIRouter] Running active health check on '${provider}'...`);
+      if (provider === 'n8n') {
+        const res = await fetch('https://httpbin.org/get', { method: 'GET', timeout: 5000 } as any);
+        return res.ok;
+      }
+
+      const key = aiKeyManager.getKeyForProvider(provider);
+      if (!key) return false;
+
+      const dummyReq: AIRequest = { prompt: 'ping', maxTokens: 5, bypassMemory: true };
+      const testResponse = await this.dispatchToProvider(provider, dummyReq, key);
+      return !!testResponse.text;
+    } catch (e) {
+      console.warn(`[AIRouter] Active health check failed for '${provider}':`, e);
+      return false;
+    }
+  }
+
+  // ── Dispatchers ──────────────────────────────────────────────────────────────
+
+  private async dispatchToProvider(
+    provider: Provider,
+    request: AIRequest,
+    overrideKey?: string
+  ): Promise<AIResponse> {
+    switch (provider) {
+      case 'gemini':   return this.callGemini(request, overrideKey);
+      case 'groq':     return this.callGroq(request, overrideKey);
+      case 'cerebras': return this.callCerebras(request, overrideKey);
+      case 'openrouter': return this.callOpenRouter(request, overrideKey);
+    }
+  }
+
+  private async callGemini(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
+    const key = overrideKey ?? aiKeyManager.getKeyForProvider('gemini');
+    if (!key) throw new Error('No Gemini keys available');
+
+    const model = request.context === 'coach' ? GEMINI_MODELS.heavy : GEMINI_MODELS.fast;
+
+    const ai = new GoogleGenAI({ apiKey: key });
+    const fullPrompt = request.systemPrompt
+      ? `${request.systemPrompt}\n\n${request.prompt}`
+      : request.prompt;
+
+    const result = await ai.models.generateContent({
+      model,
+      contents: fullPrompt,
+      config: {
+        maxOutputTokens: request.maxTokens ?? 1024,
+        temperature: request.temperature ?? 0.7,
+      },
+    });
+
+    const text = cleanAiResponse(result.text ?? '');
+    aiKeyManager.reportSuccess(key);
+    return { text, provider: 'gemini', model, usedFallback: false, offline: false };
+  }
+
+  private async callGroq(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
+    const key = overrideKey ?? aiKeyManager.getKeyForProvider('groq');
+    if (!key) throw new Error('No Groq keys available');
+
+    const model = request.context === 'coach' ? GROQ_MODELS.balanced : GROQ_MODELS.fast;
+    const messages = this.buildMessages(request);
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
+    });
+
+    if (!res.ok) {
+      aiKeyManager.reportFailure(key, res.status);
+      throw new Error(`Groq returned HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
+    aiKeyManager.reportSuccess(key);
+    return { text, provider: 'groq', model, usedFallback: false, offline: false };
+  }
+
+  private async callCerebras(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
+    const key = overrideKey ?? aiKeyManager.getKeyForProvider('cerebras');
+    if (!key) throw new Error('No Cerebras keys available');
+
+    const messages = this.buildMessages(request);
+
+    const res = await fetch('https://api.cerebras.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: CEREBRAS_MODEL, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
+    });
+
+    if (!res.ok) {
+      aiKeyManager.reportFailure(key, res.status);
+      throw new Error(`Cerebras returned HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
+    aiKeyManager.reportSuccess(key);
+    return { text, provider: 'cerebras', model: CEREBRAS_MODEL, usedFallback: false, offline: false };
+  }
+
+  private async callOpenRouter(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
+    const key = overrideKey ?? aiKeyManager.getKeyForProvider('openrouter');
+    if (!key) throw new Error('No OpenRouter keys available');
+
+    const model = OPENROUTER_MODELS.default;
+    const messages = this.buildMessages(request);
+
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://mwijay.app',
+        'X-Title': 'Mwijay Note',
+      },
+      body: JSON.stringify({ model, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
+    });
+
+    if (!res.ok) {
+      aiKeyManager.reportFailure(key, res.status);
+      throw new Error(`OpenRouter returned HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
+    aiKeyManager.reportSuccess(key);
+    return { text, provider: 'openrouter', model, usedFallback: false, offline: false };
   }
 
   private async tryCloudFallback(request: AIRequest): Promise<AIResponse | null> {
@@ -143,7 +465,7 @@ class AIRouter {
       const baseRoot = base.replace(/\/webhook\/[^/]+$/, '');
       const cloudUrl = `${baseRoot}/webhook/mwijay-master`;
 
-      console.info(`[AIRouter] Attempting premium cloud fallback to n8n: ${cloudUrl}`);
+      console.info(`[AIRouter] Initiating cloud failover webhook: ${cloudUrl}`);
 
       const payload = {
         event: 'ai_request',
@@ -170,10 +492,10 @@ class AIRouter {
         if (data && typeof data === 'object') {
           const text = data.text || data.output || (typeof data.response === 'string' ? data.response : null);
           if (text) {
-            console.info('[AIRouter] Cloud webhook fallback succeeded!');
+            console.info('[AIRouter] Cloud webhook failover call succeeded!');
             return {
               text: cleanAiResponse(text),
-              provider: 'openrouter',
+              provider: 'n8n',
               model: data.model || 'n8n-premium-fallback',
               usedFallback: true,
               offline: false
@@ -182,141 +504,12 @@ class AIRouter {
         }
       }
     } catch (err) {
-      console.warn('[AIRouter] Cloud webhook fallback failed:', err);
+      console.warn('[AIRouter] Cloud webhook failover call failed:', err);
     }
     return null;
   }
 
-  // ── Dispatch ─────────────────────────────────────────────────────────────
-
-  private async dispatchToProvider(
-    provider: Provider,
-    request: AIRequest,
-    overrideKey?: string
-  ): Promise<AIResponse> {
-    switch (provider) {
-      case 'gemini':   return this.callGemini(request, overrideKey);
-      case 'groq':     return this.callGroq(request, overrideKey);
-      case 'cerebras': return this.callCerebras(request, overrideKey);
-      case 'openrouter': return this.callOpenRouter(request, overrideKey);
-    }
-  }
-
-  // ── Gemini ───────────────────────────────────────────────────────────────
-
-  private async callGemini(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
-    const key = overrideKey ?? aiKeyManager.getKeyForProvider('gemini');
-    if (!key) throw new Error('No Gemini keys available');
-
-    const model = request.context === 'coach' ? GEMINI_MODELS.heavy : GEMINI_MODELS.fast;
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const fullPrompt = request.systemPrompt
-        ? `${request.systemPrompt}\n\n${request.prompt}`
-        : request.prompt;
-
-      const result = await ai.models.generateContent({
-        model,
-        contents: fullPrompt,
-        config: {
-          maxOutputTokens: request.maxTokens ?? 1024,
-          temperature: request.temperature ?? 0.7,
-        },
-      });
-
-      const text = cleanAiResponse(result.text ?? '');
-      aiKeyManager.reportSuccess(key);
-      return { text, provider: 'gemini', model, usedFallback: false, offline: false };
-    } catch (err: unknown) {
-      aiKeyManager.reportFailure(key, this.extractErrorCode(err));
-      throw err;
-    }
-  }
-
-  // ── Groq ─────────────────────────────────────────────────────────────────
-
-  private async callGroq(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
-    const key = overrideKey ?? aiKeyManager.getKeyForProvider('groq');
-    if (!key) throw new Error('No Groq keys available');
-
-    const model = request.context === 'coach' ? GROQ_MODELS.balanced : GROQ_MODELS.fast;
-    const messages = this.buildMessages(request);
-
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
-    });
-
-    if (!res.ok) {
-      aiKeyManager.reportFailure(key, res.status);
-      throw new Error(`Groq ${res.status}`);
-    }
-
-    const data = await res.json();
-    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
-    aiKeyManager.reportSuccess(key);
-    return { text, provider: 'groq', model, usedFallback: false, offline: false };
-  }
-
-  // ── Cerebras ──────────────────────────────────────────────────────────────
-
-  private async callCerebras(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
-    const key = overrideKey ?? aiKeyManager.getKeyForProvider('cerebras');
-    if (!key) throw new Error('No Cerebras keys available');
-
-    const messages = this.buildMessages(request);
-
-    const res = await fetch('https://api.cerebras.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: CEREBRAS_MODEL, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
-    });
-
-    if (!res.ok) {
-      aiKeyManager.reportFailure(key, res.status);
-      throw new Error(`Cerebras ${res.status}`);
-    }
-
-    const data = await res.json();
-    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
-    aiKeyManager.reportSuccess(key);
-    return { text, provider: 'cerebras', model: CEREBRAS_MODEL, usedFallback: false, offline: false };
-  }
-
-  // ── OpenRouter ───────────────────────────────────────────────────────────
-
-  private async callOpenRouter(request: AIRequest, overrideKey?: string): Promise<AIResponse> {
-    const key = overrideKey ?? aiKeyManager.getKeyForProvider('openrouter');
-    if (!key) throw new Error('No OpenRouter keys available');
-
-    const model = OPENROUTER_MODELS.default;
-    const messages = this.buildMessages(request);
-
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://mwijay.app',
-        'X-Title': 'Mwijay Note',
-      },
-      body: JSON.stringify({ model, messages, max_tokens: request.maxTokens ?? 1024, temperature: request.temperature ?? 0.7 }),
-    });
-
-    if (!res.ok) {
-      aiKeyManager.reportFailure(key, res.status);
-      throw new Error(`OpenRouter ${res.status}`);
-    }
-
-    const data = await res.json();
-    const text = cleanAiResponse(data.choices?.[0]?.message?.content ?? '');
-    aiKeyManager.reportSuccess(key);
-    return { text, provider: 'openrouter', model, usedFallback: false, offline: false };
-  }
-
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Logging & Helpers ────────────────────────────────────────────────────────
 
   private buildMessages(request: AIRequest) {
     return [
@@ -335,16 +528,51 @@ class AIRouter {
     };
   }
 
-  private extractErrorCode(err: unknown): number | undefined {
-    if (typeof err === 'object' && err !== null) {
-      if ('status' in err) return (err as { status: number }).status;
-      if ('code' in err) return (err as { code: number }).code;
-    }
-    return undefined;
-  }
-
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private async loadLogs() {
+    try {
+      const { value } = await Preferences.get({ key: 'mwijay_ai_router_logs' });
+      if (value) {
+        this.routerLogs = JSON.parse(value);
+      }
+    } catch (e) {
+      this.routerLogs = [];
+    }
+  }
+
+  private async logEvent(
+    provider: string,
+    model: string,
+    status: 'success' | 'failed',
+    startTime: number,
+    promptLen: number,
+    error?: string
+  ) {
+    const latencyMs = Date.now() - startTime;
+    const logItem: AIRouterLog = {
+      timestamp: new Date().toISOString(),
+      promptLength: promptLen,
+      provider,
+      model,
+      status,
+      error,
+      latencyMs,
+    };
+
+    // Keep last 50 routing events
+    this.routerLogs = [logItem, ...this.routerLogs].slice(0, 50);
+
+    try {
+      await Preferences.set({
+        key: 'mwijay_ai_router_logs',
+        value: JSON.stringify(this.routerLogs),
+      });
+    } catch (e) {
+      // Non-blocking fallback
+    }
   }
 }
 

@@ -307,3 +307,19 @@ export async function buildUserMemory(): Promise<UserMemory> {
     generatedAt: new Date().toISOString(),
   };
 }
+
+export async function getCompressedMemoryPrefix(): Promise<string> {
+  try {
+    const memory = await buildUserMemory();
+    const tags = memory.topTags.join(', ');
+    const moods = `avgMood:${memory.avgMood}, trend:${memory.moodTrend}`;
+    const habits = memory.bestHabit ? `bestHabit:${memory.bestHabit}, worstHabit:${memory.worstHabit}` : 'None';
+    const finances = `income:${memory.totalIncome} TZS, expenses:${memory.totalExpenses} TZS, savings:${memory.netSavings} TZS`;
+    const swahiliPref = "User is in East Africa/Tanzania. Seamlessly blend Swahili terms (mambo, safi, vibanda, daladala) when friendly and natural.";
+    
+    return `[USER STATE: ${swahiliPref} | Mood: ${moods} | Habits: ${habits} | Finance: ${finances} | Tags: ${tags} | Engagement: ${memory.engagementScore}%]\n`;
+  } catch (e) {
+    console.warn("[memory] Failed to build compressed prefix:", e);
+    return "";
+  }
+}
