@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeftIcon, TimerIcon, PlayIcon, PauseIcon, RefreshCwIcon, CheckSquareIcon } from './Icons';
 import { Preferences } from '@capacitor/preferences';
+import haptic from '../utils/haptics';
 
 interface Preset {
     name: string;
@@ -101,7 +102,7 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         } else if (timeLeft === 0 && isActive) {
             setIsActive(false);
             playAlarm();
-            if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 300]);
+            haptic.successPattern();
             
             if (mode === 'Work') {
                 const newCount = completedRounds + 1;
@@ -116,9 +117,13 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         return () => clearInterval(interval);
     }, [isActive, timeLeft, mode, completedRounds]);
 
-    const toggleTimer = () => setIsActive(!isActive);
+    const toggleTimer = () => {
+        haptic.mediumTap();
+        setIsActive(!isActive);
+    };
     
     const resetTimer = () => {
+        haptic.mediumTap();
         setIsActive(false);
         const duration = (mode === 'Work' ? focusMinutes : breakMinutes) * 60;
         setTimeLeft(duration);
@@ -126,6 +131,7 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     };
 
     const switchMode = (newMode: 'Work' | 'Break') => {
+        haptic.lightTap();
         setMode(newMode);
         setIsActive(false);
         const duration = (newMode === 'Work' ? focusMinutes : breakMinutes) * 60;
@@ -147,9 +153,8 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     const progress = totalDuration > 0 ? ((totalDuration - timeLeft) / totalDuration) * 100 : 0;
     const strokeDashoffset = circumference - (progress / 100) * circumference;
 
-    const themeColorClass = mode === 'Work' ? 'text-rose-500' : 'text-emerald-500';
-    const bgColorClass = mode === 'Work' ? 'bg-rose-950/20' : 'bg-emerald-950/20';
     const ringColor = mode === 'Work' ? 'stroke-rose-500' : 'stroke-emerald-500';
+    const bgColorClass = mode === 'Work' ? 'bg-rose-950/20' : 'bg-emerald-950/20';
 
     return (
         <div className={`flex flex-col h-full p-4 pt-16 transition-all duration-700 ${bgColorClass} relative overflow-y-auto no-scrollbar`}>
@@ -175,7 +180,10 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 {PRESETS.map((p, idx) => (
                     <button
                         key={idx}
-                        onClick={() => { setPresetIndex(idx); }}
+                        onClick={() => {
+                            haptic.lightTap();
+                            setPresetIndex(idx);
+                        }}
                         className={`p-3 rounded-2xl border text-center transition-all ${
                             presetIndex === idx 
                                 ? 'bg-accent/10 border-accent/40 shadow-lg' 
@@ -225,10 +233,18 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                     onChange={e => setTask(e.target.value)} 
                                     placeholder="Enter study mission..."
                                     className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-4 pr-12 text-center text-sm text-isabelline outline-none focus:border-accent/40 transition-colors placeholder:text-dun/30"
-                                    onKeyDown={e => { if (e.key === 'Enter') setIsTaskSet(true); }}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            haptic.mediumTap();
+                                            setIsTaskSet(true);
+                                        }
+                                    }}
                                 />
                                 <button 
-                                    onClick={() => setIsTaskSet(true)} 
+                                    onClick={() => {
+                                        haptic.mediumTap();
+                                        setIsTaskSet(true);
+                                    }} 
                                     className="absolute right-3 top-1/2 -translate-y-1/2 text-accent hover:text-white transition-colors"
                                 >
                                     <CheckSquareIcon className="w-5 h-5"/>
@@ -236,7 +252,10 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                             </div>
                         ) : (
                             <div 
-                                onClick={() => setIsTaskSet(false)} 
+                                onClick={() => {
+                                    haptic.lightTap();
+                                    setIsTaskSet(false);
+                                }} 
                                 className="bg-card p-3 rounded-2xl border border-white/5 shadow-md flex items-center justify-between px-5 hover:bg-white/5 transition-colors cursor-pointer"
                             >
                                 <div className="text-left">
@@ -307,7 +326,7 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                     </button>
                     <button 
                         onClick={() => {
-                            // Fast forward timer by 10s for debug, or skip
+                            haptic.heavyTap();
                             setTimeLeft(3);
                         }}
                         className="w-12 h-12 bg-white/5 hover:bg-white/15 border border-white/10 rounded-full flex items-center justify-center hover:scale-105 transition-all text-dun/50 hover:text-white/80"
@@ -336,6 +355,7 @@ const PomodoroScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                         </p>
                         <button 
                             onClick={() => {
+                                haptic.lightTap();
                                 setShowSuccessModal(false);
                                 switchMode('Break');
                             }} 

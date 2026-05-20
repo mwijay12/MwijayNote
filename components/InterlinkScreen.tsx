@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ArrowLeftIcon, SearchIcon, SendIcon, BellIcon, CalendarIcon, GlobeIcon, ShareIcon, ClockIcon } from './Icons';
+import haptic from '../utils/haptics';
 
 interface InterlinkScreenProps {
     onBack: () => void;
@@ -31,36 +32,40 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
     const [emailTo, setEmailTo] = useState('');
     const [emailSubject, setEmailSubject] = useState('');
     const [emailBody, setEmailBody] = useState('');
-    
-    // Google Chat Webhook Formatter States
-    const [gchatText, setGchatText] = useState('');
+
+    // GChat Webhook Compiler States
     const [gchatTitle, setGchatTitle] = useState('');
+    const [gchatText, setGchatText] = useState('');
     const [gchatWebhookResult, setGchatWebhookResult] = useState('');
 
-    // --- Actions ---
-
     const handleGoogleSearch = () => {
+        haptic.mediumTap();
         if (!searchQuery.trim()) return;
         window.open(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`, '_blank');
     };
 
     const handleWhatsApp = () => {
+        haptic.mediumTap();
         if (!whatsappNumber.trim()) return;
-        const cleanNum = whatsappNumber.replace(/\D/g, ''); 
-        const url = `https://wa.me/${cleanNum}?text=${encodeURIComponent(whatsappMessage)}`;
-        window.open(url, '_blank');
+        // Strip out non-numeric characters for safety
+        const cleanNum = whatsappNumber.replace(/\D/g, '');
+        window.open(`https://wa.me/${cleanNum}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
     };
 
-    const handleSms = () => {
+    const handleSMS = () => {
+        haptic.mediumTap();
         if (!smsNumber.trim()) return;
         window.location.href = `sms:${smsNumber}?body=${encodeURIComponent(smsBody)}`;
     };
 
     const handleEmail = () => {
+        haptic.mediumTap();
+        if (!emailTo.trim()) return;
         window.location.href = `mailto:${encodeURIComponent(emailTo)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
     };
 
     const generateGChatPayload = () => {
+        haptic.mediumTap();
         const payloadObj = {
             cardsV2: [
                 {
@@ -92,16 +97,19 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
     };
 
     const copyGChatPayload = () => {
+        haptic.mediumTap();
         if (!gchatWebhookResult) return;
         navigator.clipboard.writeText(gchatWebhookResult);
         alert("Payload copied to clipboard!");
     };
 
     const handleCalendar = () => {
+        haptic.lightTap();
         window.open('https://calendar.google.com/calendar/u/0/r', '_blank');
     };
 
     const handleClock = () => {
+        haptic.lightTap();
         const intentUrl = "intent://com.android.deskclock.ALARM_ALERT#Intent;scheme=android-app;end";
         try {
             window.location.href = intentUrl;
@@ -115,6 +123,7 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
     };
 
     const handleShareApp = async () => {
+        haptic.lightTap();
         if (navigator.share) {
             try {
                 let urlToShare = window.location.href;
@@ -132,6 +141,16 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
         } else {
             alert("Native sharing is not supported on this browser context.");
         }
+    };
+
+    const handleGmailLink = () => {
+        haptic.lightTap();
+        window.open('https://gmail.com', '_blank');
+    };
+
+    const handleCallHotline = (num: string) => {
+        haptic.heavyTap();
+        window.location.href = `tel:${num}`;
     };
 
     return (
@@ -164,7 +183,7 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
                     <ShareIcon className="w-5 h-5 text-blue-400"/>
                     <span className="text-[9px] font-black text-dun uppercase tracking-widest mt-1">Share</span>
                 </button>
-                <button onClick={() => window.open('https://gmail.com', '_blank')} className="bg-card p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center hover:scale-105 active:scale-95 transition-all gap-1">
+                <button onClick={handleGmailLink} className="bg-card p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center hover:scale-105 active:scale-95 transition-all gap-1">
                     <span className="text-lg">✉️</span>
                     <span className="text-[9px] font-black text-dun uppercase tracking-widest mt-1">Gmail</span>
                 </button>
@@ -183,99 +202,95 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
                         <input 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleGoogleSearch()}
-                            placeholder="Query general knowledge..."
-                            className="flex-grow bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-accent/40 text-sm text-white placeholder:text-dun/30"
+                            placeholder="Type search terms..."
+                            className="flex-1 bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-accent/40 text-sm text-white placeholder:text-dun/30"
+                            onKeyDown={e => { if (e.key === 'Enter') handleGoogleSearch(); }}
                         />
-                        <button onClick={handleGoogleSearch} className="bg-accent text-black font-bold px-4 rounded-xl hover:bg-accent/90 transition-colors">
-                            <SearchIcon className="w-4 h-4"/>
+                        <button onClick={handleGoogleSearch} className="bg-accent hover:bg-accent/80 text-black px-4 rounded-xl transition-all">
+                            <SearchIcon className="w-5 h-5"/>
                         </button>
                     </div>
                 </div>
 
-                {/* 2. WhatsApp Direct Dial Card */}
+                {/* 2. WhatsApp direct messaging compiling wrapper */}
                 <div className="bg-card p-4 rounded-2xl border border-white/5 shadow-md">
                     <div className="flex items-center gap-2 mb-3 text-emerald-400 font-bold">
                         <span className="text-base">💬</span>
-                        <h3 className="text-xs uppercase tracking-widest font-black text-white">WhatsApp Direct Dial</h3>
+                        <h3 className="text-xs uppercase tracking-widest font-black text-white">WhatsApp Waiver compiler</h3>
                     </div>
+                    <p className="text-[10px] text-dun/50 mb-3 leading-relaxed">
+                        Trigger pre-compiled chat dialogues targeting direct country cellular lines without saving local address files first.
+                    </p>
                     <div className="space-y-3">
                         <input 
                             value={whatsappNumber}
                             onChange={e => setWhatsappNumber(e.target.value)}
-                            placeholder="Recipient Phone (e.g. 255712345678)"
-                            type="tel"
+                            placeholder="Enter phone with country code (e.g. 255768...)"
                             className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-400/40 text-sm text-white placeholder:text-dun/30"
                         />
-                        <div className="flex gap-2">
-                            <input 
-                                value={whatsappMessage}
-                                onChange={e => setWhatsappMessage(e.target.value)}
-                                placeholder="Write message..."
-                                className="flex-grow bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-400/40 text-sm text-white placeholder:text-dun/30"
-                            />
-                            <button onClick={handleWhatsApp} className="bg-emerald-600 p-3 rounded-xl hover:bg-emerald-500 transition-colors">
-                                <SendIcon className="w-4 h-4 text-white"/>
-                            </button>
-                        </div>
+                        <textarea 
+                            value={whatsappMessage}
+                            onChange={e => setWhatsappMessage(e.target.value)}
+                            placeholder="Message body content..."
+                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-emerald-400/40 text-sm text-white resize-none h-16 placeholder:text-dun/30"
+                        />
+                        <button onClick={handleWhatsApp} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2">
+                            <SendIcon className="w-4 h-4"/> Dispatch WhatsApp Message
+                        </button>
                     </div>
                 </div>
 
-                {/* 3. Mobile SMS / Call Hotlines Card */}
+                {/* 3. Direct SMS Dispatch */}
                 <div className="bg-card p-4 rounded-2xl border border-white/5 shadow-md">
-                    <div className="flex items-center gap-2 mb-3 text-rose-400 font-bold">
-                        <BellIcon className="w-4 h-4"/>
-                        <h3 className="text-xs uppercase tracking-widest font-black text-white">Mobile Actions & SMS</h3>
+                    <div className="flex items-center gap-2 mb-3 text-amber-400 font-bold">
+                        <span className="text-base">📱</span>
+                        <h3 className="text-xs uppercase tracking-widest font-black text-white">Quick SMS Compiler</h3>
                     </div>
                     <div className="space-y-3">
                         <input 
                             value={smsNumber}
                             onChange={e => setSmsNumber(e.target.value)}
-                            placeholder="Active phone number..."
-                            type="tel"
-                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-rose-400/40 text-sm text-white placeholder:text-dun/30"
+                            placeholder="Recipient phone number..."
+                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-amber-400/40 text-sm text-white placeholder:text-dun/30"
                         />
                         <textarea 
                             value={smsBody}
                             onChange={e => setSmsBody(e.target.value)}
-                            placeholder="Draft SMS content..."
-                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-rose-400/40 text-sm text-white resize-none h-16 placeholder:text-dun/30"
+                            placeholder="SMS body content..."
+                            className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-amber-400/40 text-sm text-white resize-none h-16 placeholder:text-dun/30"
                         />
-                        <div className="flex gap-2">
-                            <button onClick={() => window.location.href = `tel:${smsNumber}`} className="flex-1 bg-black/30 border border-white/10 text-dun hover:text-white py-2.5 rounded-xl font-bold text-xs hover:bg-white/5 transition-all">
-                                Call Number
-                            </button>
-                            <button onClick={handleSms} className="flex-1 bg-rose-600 text-white py-2.5 rounded-xl font-bold text-xs hover:bg-rose-500 transition-all shadow-md">
-                                Send Raw SMS
-                            </button>
-                        </div>
+                        <button onClick={handleSMS} className="w-full bg-amber-600 hover:bg-amber-500 text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-lg">
+                            Open in SMS App
+                        </button>
                     </div>
                 </div>
 
-                {/* 4. Gmail Workspace Draft Compiler */}
+                {/* 4. Gmail workspace draft direct dispatcher */}
                 <div className="bg-card p-4 rounded-2xl border border-white/5 shadow-md">
                     <div className="flex items-center gap-2 mb-3 text-cyan-400 font-bold">
                         <span className="text-base">📬</span>
-                        <h3 className="text-xs uppercase tracking-widest font-black text-white">Gmail Workspace Compiler</h3>
+                        <h3 className="text-xs uppercase tracking-widest font-black text-white">Gmail Draft Compiler</h3>
                     </div>
+                    <p className="text-[10px] text-dun/50 mb-3 leading-relaxed">
+                        Compose structured outlines and draft emails to launch instantly inside your workspace email client.
+                    </p>
                     <div className="space-y-3">
                         <input 
                             value={emailTo}
                             onChange={e => setEmailTo(e.target.value)}
-                            placeholder="Recipient email address..."
-                            type="email"
+                            placeholder="Recipient address (e.g. mwijaydavie@gmail.com)"
                             className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-cyan-400/40 text-sm text-white placeholder:text-dun/30"
                         />
                         <input 
                             value={emailSubject}
                             onChange={e => setEmailSubject(e.target.value)}
-                            placeholder="Email Subject Title..."
+                            placeholder="Subject line..."
                             className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-cyan-400/40 text-sm text-white placeholder:text-dun/30"
                         />
                         <textarea 
                             value={emailBody}
                             onChange={e => setEmailBody(e.target.value)}
-                            placeholder="Write complete email body draft..."
+                            placeholder="Write message drafts here..."
                             className="w-full bg-black/40 border border-white/10 p-3 rounded-xl outline-none focus:border-cyan-400/40 text-sm text-white resize-none h-20 placeholder:text-dun/30"
                         />
                         <button onClick={handleEmail} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all shadow-lg">
@@ -343,7 +358,7 @@ const InterlinkScreen: React.FC<InterlinkScreenProps> = ({ onBack }) => {
                                     <p className="text-[10px] text-dun/50 mt-1">{h.description}</p>
                                 </div>
                                 <button 
-                                    onClick={() => window.location.href = `tel:${h.number}`}
+                                    onClick={() => handleCallHotline(h.number)}
                                     className="bg-accent hover:bg-accent/80 text-black px-3 py-1.5 rounded-lg text-xs font-black transition-all"
                                 >
                                     📞 Call
