@@ -9,6 +9,11 @@ const config: CapacitorConfig = {
     cleartext: false,
     allowNavigation: ["*.cloudinary.com", "*.google.com", "*.googleapis.com", "*.firebaseapp.com"]
   },
+  android: {
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: true
+  },
   plugins: {
     Network: {
       shouldShowReachabilityDialog: true
@@ -16,6 +21,9 @@ const config: CapacitorConfig = {
     FirebaseAuthentication: {
       skipNativeAuth: false,
       providers: ["google.com"]
+    },
+    CapacitorHttp: {
+      enabled: true
     }
   }
 };

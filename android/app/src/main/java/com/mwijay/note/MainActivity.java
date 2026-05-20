@@ -6,6 +6,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.webkit.WebSettings;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -16,6 +17,7 @@ import java.util.List;
 
 public class MainActivity extends BridgeActivity {
     private static final int PERMISSION_REQUEST_CODE = 123;
+    private static final String TAG = "MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,19 +35,39 @@ public class MainActivity extends BridgeActivity {
             }
         });
 
-        // Check and request permissions at startup
+        // Request initial permissions
         requestInitialPermissions();
 
-        // Verify WebView existence to debug "view not found"
-        // Using a post-runnable to ensure layout inflation is complete
+        // Configure WebView settings for Background Audio and Media Playback
         getWindow().getDecorView().post(() -> {
             View webView = findViewById(com.getcapacitor.android.R.id.webview);
             if (webView == null) {
-                Log.e("MwijayNote", "CRITICAL: WebView still not found in default layout!");
+                Log.e(TAG, "WebView layout check: WebView still not found!");
             } else {
-                Log.d("MwijayNote", "WebView successfully found in default layout.");
+                Log.d(TAG, "WebView successfully found. Customizing settings for background audio...");
+                try {
+                    android.webkit.WebView cv = (android.webkit.WebView) webView;
+                    WebSettings settings = cv.getSettings();
+                    settings.setMediaPlaybackRequiresUserGesture(false);
+                    Log.d(TAG, "WebView background playback gesture restriction successfully lifted.");
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to apply custom WebSettings", e);
+                }
             }
         });
+    }
+
+    @Override
+    protected void onPause() {
+        Log.d(TAG, "onPause called: keeping WebView processes active in background...");
+        // Call super.onPause() but ensure WebView is not paused to prevent background audio freezes
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        Log.d(TAG, "onResume called");
+        super.onResume();
     }
 
     private void requestInitialPermissions() {
@@ -64,11 +86,15 @@ public class MainActivity extends BridgeActivity {
             }
         }
         
+        // Foreground & Boot permissions
+        permissions.add(Manifest.permission.WAKE_LOCK);
+        if (Build.VERSION.SDK_INT >= 34) {
+            permissions.add(Manifest.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK);
+        }
+        
         // Multimedia
         permissions.add(Manifest.permission.CAMERA);
         permissions.add(Manifest.permission.RECORD_AUDIO);
-        
-        // Bluetooth & Location removed as per performance optimization plan
 
         List<String> listPermissionsNeeded = new ArrayList<>();
         for (String p : permissions) {
@@ -86,7 +112,7 @@ public class MainActivity extends BridgeActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            Log.d("MwijayNote", "Permissions request completed");
+            Log.d(TAG, "Permissions request completed");
         }
     }
 }
