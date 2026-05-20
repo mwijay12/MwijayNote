@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function incoming() { return request.resource.data; }
+
+    // User Profile Rules
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isOwner(userId);
+      
+      // Journals
+      match /journals/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Expenses
+      match /expenses/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Habits
+      match /habits/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Financial Goals
+      match /goals/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Reminders
+      match /reminders/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Custom Music Library
+      match /userTracks/{id} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Playlists
+      match /playlists/{id} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

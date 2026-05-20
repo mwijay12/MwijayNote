@@ -1,0 +1,82 @@
+{
+  "name": "Mwijay Note - Welcome Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mwijay-welcome",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "1a2b3c4d-0001",
+      "name": "Webhook - New User",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "mwijay-welcome"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event }}",
+              "rightValue": "user_registered",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-0002",
+      "name": "Check: Is New User?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@mwijay.app",
+        "toEmail": "={{ $('Webhook - New User').item.json.userEmail }}",
+        "subject": "🎉 Welcome to Mwijay Note, {{ $('Webhook - New User').item.json.userName }}!",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><head><meta charset='UTF-8'/><style>body{font-family:Inter,Arial,sans-serif;background:#080a0f;color:#f8fafc;margin:0;padding:0}.container{max-width:600px;margin:0 auto;padding:40px 20px}.logo{font-size:32px;font-weight:900;color:#FFBC2D;letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}.tagline{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.3em;margin-bottom:40px}.hero{background:linear-gradient(135deg,#1e293b,#0f172a);border-radius:20px;padding:40px;border:1px solid rgba(255,188,45,.15);margin-bottom:32px}.hero h1{font-size:28px;font-weight:900;margin:0 0 16px;line-height:1.2}.accent{color:#FFBC2D}.hero p{font-size:15px;color:#94a3b8;line-height:1.6;margin:0 0 24px}.cta{display:inline-block;background:#FFBC2D;color:#0f172a;font-weight:700;font-size:14px;padding:14px 32px;border-radius:12px;text-decoration:none;letter-spacing:.05em}.features{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}.feature{background:rgba(30,41,59,.5);border:1px solid rgba(255,255,255,.05);border-radius:12px;padding:20px}.feature-icon{font-size:24px;margin-bottom:8px}.feature-title{font-size:13px;font-weight:700;color:#f8fafc;margin:0 0 4px}.feature-desc{font-size:12px;color:#64748b;margin:0}.footer{text-align:center;font-size:12px;color:#334155}</style></head><body><div class='container'><div class='logo'>Mwijay Note</div><div class='tagline'>Your Digital Brain — Prestige OS</div><div class='hero'><h1>Welcome aboard,<br/><span class='accent'>{{ $('Webhook - New User').item.json.userName }}</span> 👋</h1><p>Your intelligent digital companion is now ready. Mwijay Note is a powerful, offline-first ecosystem for capturing thoughts, tracking growth, managing finances, and supercharging your learning journey.</p><a href='https://mwijay.app' class='cta'>Open Your Workspace →</a></div><div class='features'><div class='feature'><div class='feature-icon'>📓</div><div class='feature-title'>Smart Journaling</div><div class='feature-desc'>AI-powered writing with mood detection and auto-formatting.</div></div><div class='feature'><div class='feature-icon'>🧠</div><div class='feature-title'>AI Coach</div><div class='feature-desc'>Personalized insights based on your habits and goals.</div></div><div class='feature'><div class='feature-icon'>💰</div><div class='feature-title'>Finance Tracker</div><div class='feature-desc'>Budgets, recurring transactions, and goal tracking.</div></div><div class='feature'><div class='feature-icon'>📡</div><div class='feature-title'>Offline First</div><div class='feature-desc'>Works perfectly without internet. Syncs when you reconnect.</div></div></div><div class='footer'><p>© 2025 Mwijay Note — Built with ❤️ in Nairobi</p><p style='color:#1e293b'>You received this because you signed up at mwijay.app.</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "1a2b3c4d-0003",
+      "name": "Send Welcome Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 220]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"message\": \"Welcome email queued\" }"
+      },
+      "id": "1a2b3c4d-0004",
+      "name": "Respond: OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [920, 220]
+    }
+  ],
+  "connections": {
+    "Webhook - New User": {
+      "main": [[{ "node": "Check: Is New User?", "type": "main", "index": 0 }]]
+    },
+    "Check: Is New User?": {
+      "main": [
+        [{ "node": "Send Welcome Email", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Send Welcome Email": {
+      "main": [[{ "node": "Respond: OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["mwijay", "email", "onboarding"],
+  "notes": "SETUP: Configure the 'Send Welcome Email' node with your SMTP credentials (Gmail/SendGrid). The webhook URL will be: https://YOUR_N8N_DOMAIN/webhook/mwijay-welcome"
+}

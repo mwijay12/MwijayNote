@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "60459463782",
+    "project_id": "mwijay-note",
+    "storage_bucket": "mwijay-note.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:60459463782:android:797ae9cf246c9c0eed69a7",
+        "android_client_info": {
+          "package_name": "com.mwijay.note"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "60459463782-9idg6his0d2od3e0s9amd8ntmn7rthel.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpkxg2JW9Lw0FChMv7nTzNWeBB_10Ov5E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "60459463782-9idg6his0d2od3e0s9amd8ntmn7rthel.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

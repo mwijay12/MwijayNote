@@ -1,0 +1,178 @@
+{
+  "name": "Mwijay Note - Google Sheets Backup",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mwijay-sync",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "2a3b4c5d-0001",
+      "name": "Webhook - Data Sync",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "webhookId": "mwijay-sync"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.event }}",
+              "rightValue": "new_journal",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "2a3b4c5d-0002",
+      "name": "Is Journal Entry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Webhook - Data Sync').item.json.event }}",
+              "rightValue": "new_expense",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "2a3b4c5d-0003",
+      "name": "Is Expense?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [470, 420]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID_HERE" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Journals" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Data Sync').item.json.timestamp }}",
+            "User Email": "={{ $('Webhook - Data Sync').item.json.userEmail }}",
+            "User Name": "={{ $('Webhook - Data Sync').item.json.userName }}",
+            "Journal ID": "={{ $('Webhook - Data Sync').item.json.data.id }}",
+            "Title": "={{ $('Webhook - Data Sync').item.json.data.title }}",
+            "Type": "={{ $('Webhook - Data Sync').item.json.data.type }}",
+            "Mood Score": "={{ $('Webhook - Data Sync').item.json.data.mood }}",
+            "Word Count": "={{ $('Webhook - Data Sync').item.json.data.content?.replace(/<[^>]+>/g, '').split(' ').length }}",
+            "Tags": "={{ $('Webhook - Data Sync').item.json.data.tags?.join(', ') }}",
+            "Date Written": "={{ $('Webhook - Data Sync').item.json.data.date }}"
+          },
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "type": "string", "required": false },
+            { "id": "User Email", "displayName": "User Email", "type": "string", "required": false },
+            { "id": "User Name", "displayName": "User Name", "type": "string", "required": false },
+            { "id": "Journal ID", "displayName": "Journal ID", "type": "string", "required": false },
+            { "id": "Title", "displayName": "Title", "type": "string", "required": false },
+            { "id": "Type", "displayName": "Type", "type": "string", "required": false },
+            { "id": "Mood Score", "displayName": "Mood Score", "type": "string", "required": false },
+            { "id": "Word Count", "displayName": "Word Count", "type": "string", "required": false },
+            { "id": "Tags", "displayName": "Tags", "type": "string", "required": false },
+            { "id": "Date Written", "displayName": "Date Written", "type": "string", "required": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a3b4c5d-0004",
+      "name": "Sheets: Append Journal",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [720, 120]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID_HERE" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Expenses" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Data Sync').item.json.timestamp }}",
+            "User Email": "={{ $('Webhook - Data Sync').item.json.userEmail }}",
+            "User Name": "={{ $('Webhook - Data Sync').item.json.userName }}",
+            "Expense ID": "={{ $('Webhook - Data Sync').item.json.data.id }}",
+            "Amount": "={{ $('Webhook - Data Sync').item.json.data.amount }}",
+            "Category": "={{ $('Webhook - Data Sync').item.json.data.category }}",
+            "Type": "={{ $('Webhook - Data Sync').item.json.data.type }}",
+            "Notes": "={{ $('Webhook - Data Sync').item.json.data.notes }}",
+            "Date": "={{ $('Webhook - Data Sync').item.json.data.date }}"
+          },
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "type": "string", "required": false },
+            { "id": "User Email", "displayName": "User Email", "type": "string", "required": false },
+            { "id": "User Name", "displayName": "User Name", "type": "string", "required": false },
+            { "id": "Expense ID", "displayName": "Expense ID", "type": "string", "required": false },
+            { "id": "Amount", "displayName": "Amount", "type": "string", "required": false },
+            { "id": "Category", "displayName": "Category", "type": "string", "required": false },
+            { "id": "Type", "displayName": "Type", "type": "string", "required": false },
+            { "id": "Notes", "displayName": "Notes", "type": "string", "required": false },
+            { "id": "Date", "displayName": "Date", "type": "string", "required": false }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2a3b4c5d-0005",
+      "name": "Sheets: Append Expense",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"synced\", \"event\": \"{{ $('Webhook - Data Sync').item.json.event }}\" }"
+      },
+      "id": "2a3b4c5d-0006",
+      "name": "Respond: Synced",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Data Sync": {
+      "main": [
+        [
+          { "node": "Is Journal Entry?", "type": "main", "index": 0 },
+          { "node": "Is Expense?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Is Journal Entry?": {
+      "main": [
+        [{ "node": "Sheets: Append Journal", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Is Expense?": {
+      "main": [
+        [{ "node": "Sheets: Append Expense", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Sheets: Append Journal": {
+      "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]]
+    },
+    "Sheets: Append Expense": {
+      "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["mwijay", "google-sheets", "backup", "sync"],
+  "notes": "SETUP: 1) Create a Google Sheet with two tabs named 'Journals' and 'Expenses'. 2) Replace YOUR_GOOGLE_SHEET_ID_HERE with your actual Sheet ID (from the URL). 3) Connect your Google Account credentials in n8n. 4) The webhook URL will be: https://YOUR_N8N_DOMAIN/webhook/mwijay-sync — paste this into the app Settings > Automation > N8n Webhook URL."
+}

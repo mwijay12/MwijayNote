@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Mwijay Note</string>
+    <string name="title_activity_main">Mwijay Note</string>
+    <string name="package_name">com.mwijay.note</string>
+    <string name="custom_url_scheme">com.mwijay.note</string>
+    <string name="server_client_id">60459463782-9idg6his0d2od3e0s9amd8ntmn7rthel.apps.googleusercontent.com</string>
+</resources>

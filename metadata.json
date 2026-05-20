@@ -1,0 +1,14 @@
+{
+  "name": "Mwijay-Note",
+  "description": "A next-generation AI-powered diary and notebook designed for mindful journaling, self-reflection, and personal growth. Your personal space to think, reflect, and grow.",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone",
+    "camera",
+    "notifications"
+  ],
+  "capabilities": [
+    "audio_background",
+    "navigation_history"
+  ]
+}

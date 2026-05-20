@@ -1,0 +1,306 @@
+{
+  "name": "Mwijay Note — Master Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mwijay-master",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "master-0001",
+      "name": "Webhook - Master Entry",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "mwijay-master"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "user_registered", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "new_journal", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "new_expense", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "streak_milestone", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "goal_completed", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "conditions": { "options": {}, "conditions": [{ "leftValue": "={{ $json.event }}", "rightValue": "generate_pdf", "operator": { "type": "string", "operation": "equals" } }] } }
+          ]
+        },
+        "options": {}
+      },
+      "id": "master-0002",
+      "name": "Route by Event",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "🎉 Welcome to Mwijay Note, {{ $('Webhook - Master Entry').item.json.userName }}!",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;color:#f8fafc;padding:40px'><div style='max-width:560px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;border:1px solid rgba(255,188,45,.2)'><h1 style='color:#FFBC2D;font-size:26px'>Welcome, {{ $('Webhook - Master Entry').item.json.userName }}! 🧠</h1><p style='color:#94a3b8;line-height:1.6'>Your digital brain is ready. Mwijay Note is an offline-first AI-powered journaling and productivity ecosystem.</p><div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0'><div style='background:#0f172a;border-radius:12px;padding:16px'><div style='font-size:22px'>📓</div><div style='font-size:13px;font-weight:700;margin:4px 0'>Smart Journaling</div><div style='font-size:11px;color:#64748b'>AI-powered writing with mood detection</div></div><div style='background:#0f172a;border-radius:12px;padding:16px'><div style='font-size:22px'>🧠</div><div style='font-size:13px;font-weight:700;margin:4px 0'>AI Coach</div><div style='font-size:11px;color:#64748b'>Personalized insights from your data</div></div><div style='background:#0f172a;border-radius:12px;padding:16px'><div style='font-size:22px'>💰</div><div style='font-size:13px;font-weight:700;margin:4px 0'>Finance Tracker</div><div style='font-size:11px;color:#64748b'>Budgets, goals, and smart alerts</div></div><div style='background:#0f172a;border-radius:12px;padding:16px'><div style='font-size:22px'>📡</div><div style='font-size:13px;font-weight:700;margin:4px 0'>Offline First</div><div style='font-size:11px;color:#64748b'>Works without internet, syncs when ready</div></div></div><a href='https://mwijay.app' style='display:inline-block;background:#FFBC2D;color:#0f172a;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none'>Open Your Workspace →</a><p style='font-size:11px;color:#334155;margin-top:24px'>© 2025 Mwijay Note</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0003",
+      "name": "Email: Welcome",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 60]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Users" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Master Entry').item.json.timestamp }}",
+            "Name": "={{ $('Webhook - Master Entry').item.json.userName }}",
+            "Email": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+            "Platform": "={{ $('Webhook - Master Entry').item.json.data.platform }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "master-0004",
+      "name": "Sheets: Log User",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [700, 160]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Journals" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Master Entry').item.json.timestamp }}",
+            "User": "={{ $('Webhook - Master Entry').item.json.userName }}",
+            "Title": "={{ $('Webhook - Master Entry').item.json.data.journal.title }}",
+            "Type": "={{ $('Webhook - Master Entry').item.json.data.journal.type }}",
+            "Mood": "={{ $('Webhook - Master Entry').item.json.data.journal.mood }}",
+            "Words": "={{ $('Webhook - Master Entry').item.json.data.journal.wordCount }}",
+            "Tags": "={{ $('Webhook - Master Entry').item.json.data.journal.tags?.join(', ') }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "master-0005",
+      "name": "Sheets: Log Journal",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [700, 280]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $('Webhook - Master Entry').item.json.data.journal.mood }}", "rightValue": 2, "operator": { "type": "number", "operation": "smallerEqual" } }]
+        }
+      },
+      "id": "master-0006",
+      "name": "Low Mood? (≤2)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [940, 280]
+    },
+    {
+      "parameters": {
+        "fromEmail": "care@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "💙 Hey {{ $('Webhook - Master Entry').item.json.userName }}, we see you",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;color:#f8fafc;padding:40px'><div style='max-width:500px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;border:1px solid rgba(99,179,237,.2)'><h2 style='color:#60a5fa'>Hey {{ $('Webhook - Master Entry').item.json.userName }}, rough day? 💙</h2><p style='color:#94a3b8;line-height:1.6'>We noticed your mood was a bit low today. That's completely okay — some days are harder than others.</p><p style='color:#94a3b8'>Small things that can help:</p><ul style='color:#94a3b8;line-height:2'><li>Take a 5-minute walk outside</li><li>Write 3 things you're grateful for</li><li>Drink a glass of water</li><li>Talk to someone you trust</li></ul><p style='color:#64748b;font-size:12px'>Mwijay Note — Your Digital Companion</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0007",
+      "name": "Email: Mood Support",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1180, 220]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Expenses" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Master Entry').item.json.timestamp }}",
+            "User": "={{ $('Webhook - Master Entry').item.json.userName }}",
+            "Amount": "={{ $('Webhook - Master Entry').item.json.data.expense.amount }}",
+            "Category": "={{ $('Webhook - Master Entry').item.json.data.expense.category }}",
+            "Type": "={{ $('Webhook - Master Entry').item.json.data.expense.type }}",
+            "Budget%": "={{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "master-0008",
+      "name": "Sheets: Log Expense",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {},
+          "conditions": [{ "leftValue": "={{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}", "rightValue": 80, "operator": { "type": "number", "operation": "largerEqual" } }]
+        }
+      },
+      "id": "master-0009",
+      "name": "Budget ≥ 80%?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [940, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "⚠️ Budget Alert — {{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}% used",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;color:#f8fafc;padding:40px'><div style='max-width:500px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;border:1px solid rgba(251,146,60,.3)'><h2 style='color:#fb923c'>⚠️ Budget Warning</h2><p style='color:#94a3b8'>Hi {{ $('Webhook - Master Entry').item.json.userName }}, you've used <strong style='color:#fb923c'>{{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}%</strong> of your monthly budget.</p><div style='background:#0f172a;border-radius:12px;padding:20px;margin:20px 0'><div style='height:12px;background:#1e293b;border-radius:6px;overflow:hidden'><div style='height:100%;width:{{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}%;background:{{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent >= 100 ? \"#ef4444\" : \"#fb923c\" }};border-radius:6px'></div></div><p style='color:#64748b;font-size:12px;margin-top:8px'>{{ $('Webhook - Master Entry').item.json.data.budgetUsagePercent }}% of monthly income spent</p></div><p style='color:#94a3b8;font-size:13px'>Consider reviewing your spending in Mwijay Note.</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0010",
+      "name": "Email: Budget Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1180, 400]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "🔥 {{ $('Webhook - Master Entry').item.json.data.streakDays }}-Day Streak! You're on fire!",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;color:#f8fafc;padding:40px'><div style='max-width:500px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid rgba(255,188,45,.3)'><div style='font-size:60px'>🔥</div><h1 style='color:#FFBC2D;font-size:32px;margin:16px 0'>{{ $('Webhook - Master Entry').item.json.data.streakDays }} Days!</h1><p style='color:#94a3b8;line-height:1.6'>Incredible, {{ $('Webhook - Master Entry').item.json.userName }}! You've journaled for {{ $('Webhook - Master Entry').item.json.data.streakDays }} consecutive days. This habit is building something powerful.</p><p style='color:#FFBC2D;font-weight:700;font-size:18px;margin-top:24px'>Keep going. Don't break the chain. 🧠</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0011",
+      "name": "Email: Streak Milestone",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 520]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "mode": "id", "__rl": true, "value": "YOUR_GOOGLE_SHEET_ID" },
+        "sheetName": { "mode": "name", "__rl": true, "value": "Milestones" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $('Webhook - Master Entry').item.json.timestamp }}",
+            "User": "={{ $('Webhook - Master Entry').item.json.userName }}",
+            "Event": "={{ $('Webhook - Master Entry').item.json.event }}",
+            "Detail": "={{ $('Webhook - Master Entry').item.json.data.streakDays + ' day streak' }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "master-0012",
+      "name": "Sheets: Log Milestone",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [940, 520]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "🎯 Goal Achieved: {{ $('Webhook - Master Entry').item.json.data.goal.title }}",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;color:#f8fafc;padding:40px'><div style='max-width:500px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid rgba(74,222,128,.3)'><div style='font-size:60px'>🏆</div><h1 style='color:#4ade80'>Goal Completed!</h1><p style='color:#94a3b8'>Congratulations {{ $('Webhook - Master Entry').item.json.userName }}! You've completed your goal:</p><div style='background:#0f172a;border-radius:12px;padding:20px;margin:20px 0'><p style='color:#FFBC2D;font-weight:700;font-size:18px;margin:0'>{{ $('Webhook - Master Entry').item.json.data.goal.title }}</p><p style='color:#64748b;font-size:12px;margin:4px 0'>{{ $('Webhook - Master Entry').item.json.data.goal.category }}</p></div><p style='color:#94a3b8'>Set your next goal and keep growing. 🚀</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0013",
+      "name": "Email: Goal Completed",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [700, 640]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdf.co/v1/pdf/convert/from/html",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "YOUR_PDF_CO_API_KEY" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"html\": \"<html><body style='font-family:Inter,sans-serif;padding:40px'><h1 style='color:#FFBC2D'>Mwijay Note — Weekly Report</h1><p>User: {{ $('Webhook - Master Entry').item.json.userName }}</p><p>Generated: {{ $now.toFormat('yyyy-MM-dd') }}</p><h2>Journals: {{ $('Webhook - Master Entry').item.json.data.memory.totalJournals }}</h2><p>Streak: {{ $('Webhook - Master Entry').item.json.data.memory.streakDays }} days | Avg Mood: {{ $('Webhook - Master Entry').item.json.data.memory.avgMood }}/5</p><h2>Finances</h2><p>Income: {{ $('Webhook - Master Entry').item.json.data.memory.totalIncome }} | Expenses: {{ $('Webhook - Master Entry').item.json.data.memory.totalExpenses }} | Net: {{ $('Webhook - Master Entry').item.json.data.memory.netSavings }}</p></body></html>\",\n  \"name\": \"MwijayNote_Report_{{ $now.toFormat('yyyy-MM-dd') }}.pdf\",\n  \"async\": false\n}",
+        "options": {}
+      },
+      "id": "master-0014",
+      "name": "PDF.co: Generate Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [700, 760]
+    },
+    {
+      "parameters": {
+        "fromEmail": "reports@mwijay.app",
+        "toEmail": "={{ $('Webhook - Master Entry').item.json.userEmail }}",
+        "subject": "📊 Your Mwijay Note Weekly Report",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style='font-family:Inter,sans-serif;background:#080a0f;padding:40px'><div style='max-width:500px;margin:auto;background:#1e293b;border-radius:20px;padding:40px;border:1px solid rgba(255,188,45,.2)'><h2 style='color:#FFBC2D'>Weekly Report Ready 📊</h2><p style='color:#94a3b8'>Hi {{ $('Webhook - Master Entry').item.json.userName }}, your report for this week is ready.</p><a href='{{ $('PDF.co: Generate Report').item.json.url }}' style='display:inline-block;background:#FFBC2D;color:#0f172a;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;margin-top:16px'>Download PDF Report →</a><p style='color:#334155;font-size:11px;margin-top:20px'>Link valid for 24 hours.</p></div></body></html>",
+        "options": {}
+      },
+      "id": "master-0015",
+      "name": "Email: PDF Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [940, 760]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"event\": \"{{ $('Webhook - Master Entry').item.json.event }}\" }"
+      },
+      "id": "master-0016",
+      "name": "Respond: OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1400, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - Master Entry": { "main": [[{ "node": "Route by Event", "type": "main", "index": 0 }]] },
+    "Route by Event": {
+      "main": [
+        [{ "node": "Email: Welcome", "type": "main", "index": 0 }, { "node": "Sheets: Log User", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Log Journal", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Log Expense", "type": "main", "index": 0 }],
+        [{ "node": "Email: Streak Milestone", "type": "main", "index": 0 }, { "node": "Sheets: Log Milestone", "type": "main", "index": 0 }],
+        [{ "node": "Email: Goal Completed", "type": "main", "index": 0 }],
+        [{ "node": "PDF.co: Generate Report", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sheets: Log Journal": { "main": [[{ "node": "Low Mood? (≤2)", "type": "main", "index": 0 }]] },
+    "Low Mood? (≤2)": { "main": [[{ "node": "Email: Mood Support", "type": "main", "index": 0 }], [{ "node": "Respond: OK", "type": "main", "index": 0 }]] },
+    "Sheets: Log Expense": { "main": [[{ "node": "Budget ≥ 80%?", "type": "main", "index": 0 }]] },
+    "Budget ≥ 80%?": { "main": [[{ "node": "Email: Budget Alert", "type": "main", "index": 0 }], [{ "node": "Respond: OK", "type": "main", "index": 0 }]] },
+    "PDF.co: Generate Report": { "main": [[{ "node": "Email: PDF Report", "type": "main", "index": 0 }]] },
+    "Email: Welcome": { "main": [[{ "node": "Respond: OK", "type": "main", "index": 0 }]] },
+    "Email: Streak Milestone": { "main": [[{ "node": "Respond: OK", "type": "main", "index": 0 }]] },
+    "Email: Goal Completed": { "main": [[{ "node": "Respond: OK", "type": "main", "index": 0 }]] },
+    "Email: PDF Report": { "main": [[{ "node": "Respond: OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["mwijay", "master", "automation"],
+  "notes": "SETUP: 1) Replace YOUR_GOOGLE_SHEET_ID in all Google Sheets nodes with your actual sheet ID. 2) Replace YOUR_PDF_CO_API_KEY with your key from pdf.co. 3) Configure SMTP credentials in all Email nodes. 4) Create a Google Sheet with tabs: Users, Journals, Expenses, Milestones. 5) Webhook URL: https://YOUR_N8N/webhook/mwijay-master — paste this as the N8n Webhook URL in app Settings."
+}

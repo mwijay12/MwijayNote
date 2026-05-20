@@ -1,0 +1,16 @@
+{
+  "name": "Mwijay Note: Prestige OS",
+  "short_name": "Mwijay Note",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080a0f",
+  "theme_color": "#FFBC2D",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
